@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 
 namespace TestGenerator.Lib
 {
@@ -48,10 +49,11 @@ namespace TestGenerator.Lib
         private string GenerateTest(IEnumerable<UsingDirectiveSyntax> usings, NamespaceDeclarationSyntax ns, ClassDeclarationSyntax @class)
         {
             usings = usings.Append(CreateUsingDirective("NUnit.Framework"));
+            usings = usings.Append(CreateUsingDirective("Moq"));
             usings = usings.Append(CreateUsingDirective(FindFullNamespace(@class)));
             CompilationUnitSyntax cu = SyntaxFactory.CompilationUnit().AddUsings(usings.ToArray());
 
-            NamespaceDeclarationSyntax testNamespace = SyntaxFactory.NamespaceDeclaration(SyntaxFactory.QualifiedName(usings.Last().Name, SyntaxFactory.IdentifierName("Tests")));
+            NamespaceDeclarationSyntax testNamespace = SyntaxFactory.NamespaceDeclaration(SyntaxFactory.ParseName($"{usings.Last().Name}.Tests"));
             ClassDeclarationSyntax testClass = SyntaxFactory.ClassDeclaration(@class.Identifier.Text + "Tests").AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword));
             testClass = testClass.AddMembers(GenerateMethods(@class));
 
@@ -109,6 +111,101 @@ namespace TestGenerator.Lib
             }
 
             return testMethods.ToArray();
+        }
+
+        private MemberDeclarationSyntax[] GenerateSetUp(ClassDeclarationSyntax @class)
+        {
+            List<MemberDeclarationSyntax> memberDeclarations = new List<MemberDeclarationSyntax>();
+   
+            MethodDeclarationSyntax setUpMethod = CreateMethodDeclaration(SyntaxKind.PublicKeyword, "void", "SetUp", "SetUp");
+            memberDeclarations.Add(setUpMethod);
+            if (@class.Modifiers.Contains(SyntaxFactory.Token(SyntaxKind.StaticKeyword)))
+                return memberDeclarations.ToArray();
+
+            memberDeclarations.Add(CreateFieldDeclaration(SyntaxKind.PrivateKeyword, @class.Identifier.Text, $"_{@class.Identifier.Text}UnderTest"));
+            ConstructorDeclarationSyntax ctorSyntax = @class.ChildNodes().OfType<ConstructorDeclarationSyntax>()
+                                                      .OrderBy(ctorSyn => ctorSyn.ParameterList.Parameters.Count)
+                                                      .First();
+
+            foreach(ParameterSyntax paramSyn in ctorSyntax.ParameterList.Parameters.Where(parameter => !parameter.Identifier.Text.StartsWith('I')))
+            {
+                setUpMethod = setUpMethod.AddBodyStatements(
+                    CreateAssignmentStatement(
+                        paramSyn.Type.ToString(),
+                        paramSyn.Identifier.Text,
+                        false,
+                        "default"));
+            }
+
+            foreach(ParameterSyntax paramSyn in ctorSyntax.ParameterList.Parameters.Where(parameter => parameter.Identifier.Text.StartsWith('I')))
+            {
+                memberDeclarations.Add(
+                    CreateFieldDeclaration(
+                        SyntaxKind.PrivateKeyword,
+                        $"Mock<{paramSyn.Type.ToString()}>",
+                        CreateDecoratedName(paramSyn)));
+
+                setUpMethod = setUpMethod.AddBodyStatements(
+                                    CreateAssignmentStatement(
+                                        "",
+                                        CreateDecoratedName(paramSyn),
+                                        true,
+                                        $"Mock<{paramSyn.Type.ToString()}>"));
+            }
+
+            setUpMethod = setUpMethod.AddBodyStatements(
+                CreateAssignmentStatement(
+                    "",
+                    $"_{@class.Identifier.Text}UnderTest",
+                    true,
+                    @class.Identifier.Text,
+                    string.Join(
+                        ", ",
+                        ctorSyntax.ParameterList.Parameters
+                        .Select(
+                            paramSyn => paramSyn.Identifier.Text
+                            .StartsWith('I') ?
+                            CreateDecoratedName(paramSyn) :
+                            paramSyn.Identifier.Text))));
+
+            return memberDeclarations.ToArray();
+        }
+
+        private MethodDeclarationSyntax CreateMethodDeclaration(SyntaxKind accessModifier, string returnType, string methodName, string attributeName = null)
+        {
+            var method = SyntaxFactory.MethodDeclaration(SyntaxFactory.ParseTypeName(returnType), methodName).AddModifiers(SyntaxFactory.Token(accessModifier));
+            if (attributeName != null)
+                method = method.AddAttributeLists(SyntaxFactory.AttributeList().AddAttributes(SyntaxFactory.Attribute(SyntaxFactory.IdentifierName(attributeName))));
+            return method;
+        }
+
+        private FieldDeclarationSyntax CreateFieldDeclaration(SyntaxKind accessModifier, string fieldType, string fieldName)
+        {
+            return SyntaxFactory.FieldDeclaration(
+                    SyntaxFactory.VariableDeclaration(
+                        SyntaxFactory.ParseTypeName(fieldType))
+                    .WithVariables(
+                        SyntaxFactory.SingletonSeparatedList<VariableDeclaratorSyntax>(
+                            SyntaxFactory.VariableDeclarator(
+                                SyntaxFactory.Identifier(fieldName)))))
+                .AddModifiers(SyntaxFactory.Token(accessModifier));
+        }
+
+        private string CreateDecoratedName(ParameterSyntax paramSyn)
+        {
+            return $"_{paramSyn.Identifier.Text}_dependency";
+        }
+
+        private StatementSyntax CreateAssignmentStatement(string type, string var, bool isNew, string assignableVar, string invokeArgs = "")
+        {
+            return SyntaxFactory.ParseStatement(
+                        string.Format(
+                            "{0} {1} = {2} {3}{4};",
+                            type,
+                            var,
+                            isNew ? "new" : "",
+                            assignableVar,
+                            isNew ? string.Format("({0})", invokeArgs) : ""));
         }
     }
 }
