@@ -7,7 +7,7 @@ using System.Linq;
 namespace TestGenerator.Lib
 {
 
-    public class TestsGenerator
+    public static class TestsGenerator
     {
         const string test =
                           @"using System;
@@ -26,7 +26,7 @@ namespace TestGenerator.Lib
                                 }
                             }";
 
-        public TestUnit[] Generate(string file = test)
+        public static TestUnit[] Generate(string file = test)
         {
             List<TestUnit> testUnits = new List<TestUnit>();
             SyntaxTree tree = CSharpSyntaxTree.ParseText(test);
@@ -45,7 +45,7 @@ namespace TestGenerator.Lib
             return testUnits.ToArray();
         }
 
-        private string GenerateTest(IEnumerable<UsingDirectiveSyntax> usings, NamespaceDeclarationSyntax ns, ClassDeclarationSyntax @class)
+        private static string GenerateTest(IEnumerable<UsingDirectiveSyntax> usings, NamespaceDeclarationSyntax ns, ClassDeclarationSyntax @class)
         {
             usings = usings.Append(CreateUsingDirective("NUnit.Framework"));
             usings = usings.Append(CreateUsingDirective("Moq"));
@@ -60,7 +60,7 @@ namespace TestGenerator.Lib
             return cu.NormalizeWhitespace().ToFullString();
         }
 
-        private UsingDirectiveSyntax CreateUsingDirective(string usingName)
+        private static UsingDirectiveSyntax CreateUsingDirective(string usingName)
         {
             NameSyntax qualifiedName = null;
             foreach (string id in usingName.Split('.'))
@@ -79,7 +79,7 @@ namespace TestGenerator.Lib
             return SyntaxFactory.UsingDirective(qualifiedName);
         }
 
-        private string FindFullNamespace(ClassDeclarationSyntax @class)
+        private static string FindFullNamespace(ClassDeclarationSyntax @class)
         {
             string fullNS = "";
 
@@ -93,7 +93,7 @@ namespace TestGenerator.Lib
             return fullNS;
         }
 
-        private MethodDeclarationSyntax[] GenerateMethods(ClassDeclarationSyntax @class)
+        private static MethodDeclarationSyntax[] GenerateMethods(ClassDeclarationSyntax @class)
         {
             List<MethodDeclarationSyntax> testMethods = new List<MethodDeclarationSyntax>();
             var methods = @class.ChildNodes().OfType<MethodDeclarationSyntax>();
@@ -160,7 +160,7 @@ namespace TestGenerator.Lib
             return testMethods.ToArray();
         }
 
-        private MemberDeclarationSyntax[] GenerateSetUp(ClassDeclarationSyntax @class)
+        private static MemberDeclarationSyntax[] GenerateSetUp(ClassDeclarationSyntax @class)
         {
             List<MemberDeclarationSyntax> memberDeclarations = new List<MemberDeclarationSyntax>();
    
@@ -218,7 +218,7 @@ namespace TestGenerator.Lib
             return memberDeclarations.ToArray();
         }
 
-        private MethodDeclarationSyntax CreateMethodDeclaration(SyntaxKind accessModifier, string returnType, string methodName, string attributeName = null)
+        private static MethodDeclarationSyntax CreateMethodDeclaration(SyntaxKind accessModifier, string returnType, string methodName, string attributeName = null)
         {
             var method = SyntaxFactory.MethodDeclaration(SyntaxFactory.ParseTypeName(returnType), methodName).AddModifiers(SyntaxFactory.Token(accessModifier));
             if (attributeName != null)
@@ -226,7 +226,7 @@ namespace TestGenerator.Lib
             return method;
         }
 
-        private FieldDeclarationSyntax CreateFieldDeclaration(SyntaxKind accessModifier, string fieldType, string fieldName)
+        private static FieldDeclarationSyntax CreateFieldDeclaration(SyntaxKind accessModifier, string fieldType, string fieldName)
         {
             return SyntaxFactory.FieldDeclaration(
                     SyntaxFactory.VariableDeclaration(
@@ -238,12 +238,12 @@ namespace TestGenerator.Lib
                 .AddModifiers(SyntaxFactory.Token(accessModifier));
         }
 
-        private string CreateDecoratedName(ParameterSyntax paramSyn)
+        private static string CreateDecoratedName(ParameterSyntax paramSyn)
         {
             return $"_{paramSyn.Identifier.Text}_dependency";
         }
 
-        private StatementSyntax CreateAssignmentStatement(string type, string var, bool isNew, string assignableVar, string invokeArgs = "")
+        private static StatementSyntax CreateAssignmentStatement(string type, string var, bool isNew, string assignableVar, string invokeArgs = "")
         {
             return SyntaxFactory.ParseStatement(
                         string.Format(
@@ -255,7 +255,7 @@ namespace TestGenerator.Lib
                             isNew ? string.Format("({0})", invokeArgs) : ""));
         }
 
-        private StatementSyntax CreateMethodCallStatement(bool isVoid, string type, string var, string obj, string method, string invokeArgs = "")
+        private static StatementSyntax CreateMethodCallStatement(bool isVoid, string type, string var, string obj, string method, string invokeArgs = "")
         {
             return SyntaxFactory.ParseStatement(
                 string.Format(
