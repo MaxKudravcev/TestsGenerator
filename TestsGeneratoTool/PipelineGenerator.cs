@@ -15,7 +15,7 @@ namespace TestGenerator.Tool
             var generateTests = new TransformManyBlock<string, TestUnit>(file => TestsGenerator.Generate(file), execOptions);
             var writeFile = new ActionBlock<TestUnit>(
                 async testUnit => await File.WriteAllTextAsync(
-                    Path.Combine(resultPath, testUnit.Name), testUnit.Test),
+                    Path.Combine(resultPath, testUnit.Name) + ".cs", testUnit.Test),
                 execOptions);
 
 
@@ -29,7 +29,7 @@ namespace TestGenerator.Tool
                 openFile.Post(path);
             openFile.Complete();
 
-            return openFile.Completion;
+            return writeFile.Completion;
         }
     }
 }

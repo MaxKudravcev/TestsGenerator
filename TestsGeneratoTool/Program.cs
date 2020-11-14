@@ -6,7 +6,7 @@ namespace TestGenerator.Tool
     {
         static async Task Main(string[] args)
         {
-            await new PipelineGenerator().Generate(3, @"..\..\..\ClassForTest.cs", @".\Results");
+            await new PipelineGenerator().Generate(3, @".\Results", @"..\..\..\ClassForTest.cs");
         }
     }
 }

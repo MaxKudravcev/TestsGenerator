@@ -9,7 +9,9 @@ namespace TestGenerator.Tests
         [Test]
         public void Test1()
         {
-            //System.Console.WriteLine(generator.Generate().Values.ToList()[0]);
+            TestUnit[] tests = TestsGenerator.Generate("asd");
+            foreach(TestUnit tu in tests)
+                System.Console.WriteLine(tu.Test + "\n\n\n");
             Assert.Pass();
         }
     }

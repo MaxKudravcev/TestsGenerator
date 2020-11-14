@@ -9,24 +9,143 @@ namespace TestGenerator.Lib
 
     public static class TestsGenerator
     {
-        const string test =
-                          @"using System;
-                            using System.Collections;
-                            using System.Linq;
-                            using System.Text;
+        const string test = @"using System;
+using System.Collections.Generic;
+using System.Text;
 
-                            namespace HelloWorld
-                            {
-                                class Program
-                                {
-                                    static void Main(string[] args)
-                                    {
-                                        Console.WriteLine(""Hello, World!"");
-                                    }
-                                }
-                            }";
+namespace CustomNamespace
+{
+    public class Custom
+    {
 
-        public static TestUnit[] Generate(string file = test)
+    }
+
+}
+
+namespace CustomNamespace1
+{
+
+    public interface IFoo
+    {
+
+    }
+
+    public class Custom1
+    {
+        public void Method1()
+        {
+
+        }
+
+        public int Method2(int arg)
+        {
+            return 42;
+        }
+
+        public Custom1(int a, string b, IFoo c)
+        {
+
+        }
+    }
+}
+
+namespace CustomNamespace2
+{
+    public class Custom2
+    {
+        public string Method1()
+        {
+            return null;
+        }
+
+        public void Method2(int arg, char b)
+        {
+
+        }
+    }
+}
+
+namespace TestsPurposeClassNamespace
+{
+
+    public interface IFoo
+    {
+
+    }
+
+    public class Foo : IFoo
+    {
+
+        public static int Bar()
+        {
+            return 42;
+        }
+
+        public Foo(int a)
+        {
+
+        }
+
+        public char FooBar(int a)
+        {
+            return 'c';
+        }
+
+        public static class StaticFoo
+        {
+            static int a;
+            static StaticFoo()
+            {
+                a = 5;
+            }
+
+            public static void Bar()
+            {
+
+            }
+        }
+
+    }
+
+
+
+    public class TestPurposeClass
+    {
+        private int a;
+        private char b;
+        private string d;
+        private IFoo c;
+
+        public int NoFoo(IFoo c, int asd, char dms, string vbn)
+        {
+            return 42;
+        }
+        public void voidMethodNoArgs()
+        {
+            return;
+        }
+        public void voidMethodArgs(int a, IFoo c)
+        {
+            return;
+        }
+
+        public string GetString()
+        {
+
+        }
+
+    public TestPurposeClass(int a, char b, string d, IFoo c)
+    {
+        this.a = a;
+        this.b = b;
+        this.d = d;
+        this.c = c;
+
+    }
+}
+}";
+        
+        public static TestUnit[] Generate(string file)
         {
             List<TestUnit> testUnits = new List<TestUnit>();
             SyntaxTree tree = CSharpSyntaxTree.ParseText(test);
@@ -39,7 +158,8 @@ namespace TestGenerator.Lib
             {
                 var classes = ns.DescendantNodes().OfType<ClassDeclarationSyntax>();
                 foreach (var @class in classes)
-                    testUnits.Add(new TestUnit(GenerateTest(usings, ns, @class), @class.Identifier.Text + "Test"));
+                    if(@class.Members.OfType<MethodDeclarationSyntax>().Count() != 0)
+                        testUnits.Add(new TestUnit(GenerateTest(usings, ns, @class), @class.Identifier.Text + "Test"));
             }
 
             return testUnits.ToArray();
@@ -54,6 +174,7 @@ namespace TestGenerator.Lib
 
             NamespaceDeclarationSyntax testNamespace = SyntaxFactory.NamespaceDeclaration(SyntaxFactory.ParseName($"{usings.Last().Name}.Tests"));
             ClassDeclarationSyntax testClass = SyntaxFactory.ClassDeclaration(@class.Identifier.Text + "Tests").AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword));
+            testClass = testClass.AddMembers(GenerateSetUp(@class));
             testClass = testClass.AddMembers(GenerateMethods(@class));
 
             cu = cu.AddMembers(testNamespace.AddMembers(testClass));
@@ -96,17 +217,16 @@ namespace TestGenerator.Lib
         private static MethodDeclarationSyntax[] GenerateMethods(ClassDeclarationSyntax @class)
         {
             List<MethodDeclarationSyntax> testMethods = new List<MethodDeclarationSyntax>();
-            var methods = @class.ChildNodes().OfType<MethodDeclarationSyntax>();
-
-            foreach (var method in methods.Where(method => method.Modifiers.Contains(SyntaxFactory.Token(SyntaxKind.PublicKeyword))))
+            var methods = @class.Members.OfType<MethodDeclarationSyntax>();
+            foreach (var method in methods.Where(m => m.Modifiers.Any(SyntaxKind.PublicKeyword)))
             {
                 MethodDeclarationSyntax testMethod = CreateMethodDeclaration(SyntaxKind.PublicKeyword, "void", method.Identifier.Text + "Test", "Test");
                 string invokeArgs = "";
 
                 //Arrange
-                foreach (ParameterSyntax paramSyn in method.ParameterList.Parameters.Where(param => !param.Identifier.Text.StartsWith('I')))
+                foreach (ParameterSyntax paramSyn in method.ParameterList.Parameters)
                 {
-                    if (!paramSyn.Identifier.Text.StartsWith('I'))
+                    if (!paramSyn.Type.ToString().StartsWith('I'))
                     {
                         testMethod = testMethod.AddBodyStatements(
                             CreateAssignmentStatement(
@@ -122,13 +242,13 @@ namespace TestGenerator.Lib
                     invokeArgs = invokeArgs.Remove(invokeArgs.Length - 2);
 
                 //Act + Assert
-                if (method.ReturnType == SyntaxFactory.ParseTypeName("void"))
+                if (method.ReturnType.ToString() == "void")
                     testMethod = testMethod.AddBodyStatements(
                         CreateMethodCallStatement(
                             true,
                             "",
                             "",
-                            method.Modifiers.Contains(SyntaxFactory.Token(SyntaxKind.StaticKeyword)) ?
+                            method.Modifiers.Any(SyntaxKind.StaticKeyword) ?
                                 @class.Identifier.Text :
                                 $"_{@class.Identifier.Text}UnderTest",
                             method.Identifier.Text,
@@ -140,7 +260,7 @@ namespace TestGenerator.Lib
                             false,
                             method.ReturnType.ToString(),
                             "actual",
-                            method.Modifiers.Contains(SyntaxFactory.Token(SyntaxKind.StaticKeyword)) ?
+                            method.Modifiers.Any(SyntaxKind.StaticKeyword) ?
                                 @class.Identifier.Text :
                                 $"_{@class.Identifier.Text}UnderTest",
                             method.Identifier.Text,
@@ -162,19 +282,22 @@ namespace TestGenerator.Lib
 
         private static MemberDeclarationSyntax[] GenerateSetUp(ClassDeclarationSyntax @class)
         {
-            List<MemberDeclarationSyntax> memberDeclarations = new List<MemberDeclarationSyntax>();
-   
+            List<MemberDeclarationSyntax> memberDeclarations = new List<MemberDeclarationSyntax>();   
             MethodDeclarationSyntax setUpMethod = CreateMethodDeclaration(SyntaxKind.PublicKeyword, "void", "SetUp", "SetUp");
-            memberDeclarations.Add(setUpMethod);
-            if (@class.Modifiers.Contains(SyntaxFactory.Token(SyntaxKind.StaticKeyword)))
+            
+            if (@class.Modifiers.Any(SyntaxKind.StaticKeyword))
+            {
+                setUpMethod = setUpMethod.AddBodyStatements(new StatementSyntax[0]);
+                memberDeclarations.Add(setUpMethod);
                 return memberDeclarations.ToArray();
+            }
 
             memberDeclarations.Add(CreateFieldDeclaration(SyntaxKind.PrivateKeyword, @class.Identifier.Text, $"_{@class.Identifier.Text}UnderTest"));
-            ConstructorDeclarationSyntax ctorSyntax = @class.ChildNodes().OfType<ConstructorDeclarationSyntax>()
-                                                      .OrderBy(ctorSyn => ctorSyn.ParameterList.Parameters.Count)
-                                                      .First();
+            ParameterSyntax[] ctorParams = @class.Members.OfType<ConstructorDeclarationSyntax>()
+                                                      .FirstOrDefault()?.ParameterList.Parameters.ToArray() ?? new ParameterSyntax[0];
+            
 
-            foreach(ParameterSyntax paramSyn in ctorSyntax.ParameterList.Parameters.Where(parameter => !parameter.Identifier.Text.StartsWith('I')))
+            foreach(ParameterSyntax paramSyn in ctorParams?.Where(parameter => !parameter.Type.ToString().StartsWith('I')))
             {
                 setUpMethod = setUpMethod.AddBodyStatements(
                     CreateAssignmentStatement(
@@ -184,7 +307,7 @@ namespace TestGenerator.Lib
                         "default"));
             }
 
-            foreach(ParameterSyntax paramSyn in ctorSyntax.ParameterList.Parameters.Where(parameter => parameter.Identifier.Text.StartsWith('I')))
+            foreach(ParameterSyntax paramSyn in ctorParams?.Where(parameter => parameter.Type.ToString().StartsWith('I')))
             {
                 memberDeclarations.Add(
                     CreateFieldDeclaration(
@@ -208,13 +331,14 @@ namespace TestGenerator.Lib
                     @class.Identifier.Text,
                     string.Join(
                         ", ",
-                        ctorSyntax.ParameterList.Parameters
+                        ctorParams?
                         .Select(
-                            paramSyn => paramSyn.Identifier.Text
+                            paramSyn => paramSyn.Type.ToString()
                             .StartsWith('I') ?
                             CreateDecoratedName(paramSyn) + ".Object" :
                             paramSyn.Identifier.Text))));
 
+            memberDeclarations.Add(setUpMethod);
             return memberDeclarations.ToArray();
         }
 
